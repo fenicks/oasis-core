@@ -165,11 +165,13 @@ func summaryFromBlock(blk *block.Block) *blockSummary {
 		IORoot: mkvsNode.Root{
 			Namespace: blk.Header.Namespace,
 			Version:   blk.Header.Round,
+			Type:      mkvsNode.RootTypeIO,
 			Hash:      blk.Header.IORoot,
 		},
 		StateRoot: mkvsNode.Root{
 			Namespace: blk.Header.Namespace,
 			Version:   blk.Header.Round,
+			Type:      mkvsNode.RootTypeState,
 			Hash:      blk.Header.StateRoot,
 		},
 	}
@@ -301,16 +303,13 @@ func NewNode(
 					ChunkSize: rt.Storage.CheckpointChunkSize,
 				}, nil
 			},
-			GetRoots: func(ctx context.Context, version uint64) ([]hash.Hash, error) {
+			GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
 				blk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
 				if berr != nil {
 					return nil, berr
 				}
 
-				return []hash.Hash{
-					blk.Header.IORoot,
-					blk.Header.StateRoot,
-				}, nil
+				return blk.Header.StorageRoots(), nil
 			},
 		}
 		node.checkpointer, err = checkpoint.NewCheckpointer(node.ctx, localStorage.NodeDB(), localStorage.Checkpointer(), *checkpointerCfg)
@@ -444,10 +443,7 @@ func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
 	if err != nil {
 		return err
 	}
-	return n.localStorage.NodeDB().Finalize(ctx, round, []hash.Hash{
-		block.Header.IORoot,
-		block.Header.StateRoot,
-	})
+	return n.localStorage.NodeDB().Finalize(ctx, block.Header.StorageRoots())
 }
 
 func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchMask outstandingMask) {
@@ -506,9 +502,9 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchM
 }
 
 func (n *Node) finalize(summary *blockSummary) {
-	err := n.localStorage.NodeDB().Finalize(n.ctx, summary.Round, []hash.Hash{
-		summary.IORoot.Hash,
-		summary.StateRoot.Hash,
+	err := n.localStorage.NodeDB().Finalize(n.ctx, []mkvsNode.Root{
+		summary.IORoot,
+		summary.StateRoot,
 	})
 	switch err {
 	case nil:
@@ -549,6 +545,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime) error {
 
 		_, err := n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 			Namespace: rt.ID,
+			RootType:  storageApi.RootTypeState,
 			SrcRound:  rt.Genesis.Round,
 			SrcRoot:   emptyRoot,
 			DstRound:  rt.Genesis.Round,
@@ -564,6 +561,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime) error {
 		if !n.localStorage.NodeDB().HasRoot(storageApi.Root{
 			Namespace: rt.ID,
 			Version:   rt.Genesis.Round,
+			Type:      storageApi.RootTypeState,
 			Hash:      rt.Genesis.StateRoot,
 		}) {
 			n.logger.Warn("non-empty state root but no state specified, assuming replication",
@@ -817,6 +815,7 @@ mainLoop:
 			if lastDiff.fetched {
 				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: lastDiff.thisRoot.Namespace,
+					RootType:  lastDiff.thisRoot.Type,
 					SrcRound:  lastDiff.prevRoot.Version,
 					SrcRoot:   lastDiff.prevRoot.Hash,
 					DstRound:  lastDiff.thisRoot.Version,
@@ -944,6 +943,7 @@ mainLoop:
 				prevIORoot := mkvsNode.Root{ // IO roots aren't chained, so clear it (but leave cache intact).
 					Namespace: this.IORoot.Namespace,
 					Version:   this.IORoot.Version,
+					Type:      mkvsNode.RootTypeIO,
 				}
 				prevIORoot.Hash.Empty()
 
