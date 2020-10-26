@@ -44,6 +44,8 @@ const (
 	nodeLongRestartDuration = 10 * time.Minute
 	livenessCheckInterval   = 1 * time.Minute
 	txSourceGasPrice        = 1
+
+	crashPointProbability = 0.1
 )
 
 // TxSourceMultiShort uses multiple workloads for a short time.
@@ -68,8 +70,9 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	consensusPruneMaxKept:             200,
 	// XXX: use no more than 2 storage, 4 compute nodes as SGX E2E test
 	// instances cannot handle any more nodes that are currently configured.
-	numStorageNodes: 2,
-	numComputeNodes: 4,
+	numStorageNodes:   2,
+	numComputeNodes:   4,
+	enableCrashPoints: true,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -95,6 +98,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             1000,
+	enableCrashPoints:                 true,
 	// Nodes getting killed commonly result in corrupted tendermint WAL when the
 	// node is restarted. Enable automatic corrupted WAL recovery for validator
 	// nodes.
@@ -127,6 +131,8 @@ type txSourceImpl struct { // nolint: maligned
 	consensusPruneMaxKept             int64
 
 	tendermintRecoverCorruptedWAL bool
+
+	enableCrashPoints bool
 
 	// Configurable number of storage nodes. If running tests with long node
 	// shutdowns enabled, make sure this is at least `MinWriteReplication+1`,
@@ -388,6 +394,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		sc.generateConsensusFixture(&f.StorageWorkers[i].Consensus, false)
 		if i > 0 {
 			f.StorageWorkers[i].CheckpointSyncEnabled = true
+			if sc.enableCrashPoints {
+				f.StorageWorkers[i].CrashPointsProbability = crashPointProbability
+			}
 		}
 	}
 	for i := range f.ComputeWorkers {
@@ -395,6 +404,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		// Enable recovery from corrupted WAL.
 		f.ComputeWorkers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 		sc.generateConsensusFixture(&f.ComputeWorkers[i].Consensus, false)
+		if i > 0 && sc.enableCrashPoints {
+			f.ComputeWorkers[i].CrashPointsProbability = crashPointProbability
+		}
 	}
 	for i := range f.ByzantineNodes {
 		f.ByzantineNodes[i].Consensus.SubmissionGasPrice = txSourceGasPrice
@@ -656,6 +668,7 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		consensusPruneMinKept:             sc.consensusPruneMinKept,
 		consensusPruneMaxKept:             sc.consensusPruneMaxKept,
 		tendermintRecoverCorruptedWAL:     sc.tendermintRecoverCorruptedWAL,
+		enableCrashPoints:                 sc.enableCrashPoints,
 		numStorageNodes:                   sc.numStorageNodes,
 		numComputeNodes:                   sc.numComputeNodes,
 		seed:                              sc.seed,

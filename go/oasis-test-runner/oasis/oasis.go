@@ -6,6 +6,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
@@ -855,8 +857,17 @@ func (net *Network) startOasisNode(
 		}
 
 		if err := node.handleExit(cmdErr); err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && exitErr.ExitCode() == crash.CrashDefaultExitCode {
+				// Termination due to crasher. Restart node.
+				net.logger.Info("Node debug crash point triggered. Restarting...")
+				net.startOasisNode(node, subCmd, extraArgs)
+				return
+			}
+
 			net.errCh <- fmt.Errorf("oasis: %s node terminated: %w", node.Name, err)
 		}
+
 	}()
 
 	node.cmd = cmd
