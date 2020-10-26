@@ -17,7 +17,9 @@ func newDumpRestoreImpl() scenario.Scenario {
 		runtimeImpl: *newRuntimeImpl(
 			"dump-restore",
 			"test-long-term-client",
-			[]string{"--mode", "part1"},
+			// Use -nomsg variant as this test also compares with the database dump which cannot
+			// reconstruct the emitted messages as those are not available in the state dump alone.
+			[]string{"--mode", "part1-nomsg"},
 		),
 	}
 	return sc
