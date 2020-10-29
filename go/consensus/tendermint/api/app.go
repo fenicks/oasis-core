@@ -29,6 +29,18 @@ type MessageDispatcher interface {
 	Publish(ctx *Context, kind, msg interface{}) error
 }
 
+// NopMessageDispatcher is a no-op message dispatcher that performs no dispatch.
+type NopMessageDispatcher struct{}
+
+// Implements MessageDispatcher.
+func (nd *NopMessageDispatcher) Subscribe(interface{}, MessageSubscriber) {
+}
+
+// Implements MessageDispatcher.
+func (nd *NopMessageDispatcher) Publish(*Context, interface{}, interface{}) error {
+	return nil
+}
+
 // Application is the interface implemented by multiplexed Oasis-specific
 // ABCI applications.
 type Application interface {
