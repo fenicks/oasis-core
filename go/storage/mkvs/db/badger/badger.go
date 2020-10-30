@@ -138,6 +138,12 @@ func (d *badgerNodeDB) load() error {
 	tx := d.db.NewTransactionAt(tsMetadata, true)
 	defer tx.Discard()
 
+	// Check first if the database is even usable.
+	_, err := tx.Get(migrationMetaKeyFmt.Encode())
+	if err == nil {
+		return api.ErrUpgradeInProgress
+	}
+
 	// Load metadata.
 	item, err := tx.Get(metadataKeyFmt.Encode())
 	switch err {
