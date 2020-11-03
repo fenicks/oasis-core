@@ -860,14 +860,15 @@ func (net *Network) startOasisNode(
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) && exitErr.ExitCode() == crash.CrashDefaultExitCode {
 				// Termination due to crasher. Restart node.
-				net.logger.Info("Node debug crash point triggered. Restarting...")
-				net.startOasisNode(node, subCmd, extraArgs)
+				net.logger.Info("Node debug crash point triggered. Restarting...", "node", node.Name)
+				if err = net.startOasisNode(node, subCmd, extraArgs); err != nil {
+					net.errCh <- fmt.Errorf("oasis: %s failed restarting node after crash point: %w", node.Name, err)
+				}
 				return
 			}
 
 			net.errCh <- fmt.Errorf("oasis: %s node terminated: %w", node.Name, err)
 		}
-
 	}()
 
 	node.cmd = cmd

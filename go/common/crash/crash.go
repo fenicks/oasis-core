@@ -65,7 +65,7 @@ func newDefaultRandomProvider() RandomProvider {
 }
 
 func defaultCrashMethod() {
-	// TODO: is there a better way to do this.
+	// TODO: is there anything wrong with just using os.Exit here?
 	os.Exit(CrashDefaultExitCode)
 }
 
@@ -181,6 +181,7 @@ func (c *Crasher) Here(crashPointID string) {
 			"caller_information_is_correct", callerInformationIsCorrect,
 			"caller_filename", callerFilename,
 			"caller_line", callerLine,
+			"skip", c.callerSkip,
 		)
 		c.CrashMethod()
 	}

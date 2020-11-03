@@ -37,7 +37,7 @@ import (
 
 const (
 	timeLimitShort = 3 * time.Minute
-	timeLimitLong  = 12 * time.Hour
+	timeLimitLong  = 4 * time.Hour
 
 	nodeRestartIntervalLong = 2 * time.Minute
 	nodeLongRestartInterval = 15 * time.Minute
@@ -45,7 +45,7 @@ const (
 	livenessCheckInterval   = 1 * time.Minute
 	txSourceGasPrice        = 1
 
-	crashPointProbability = 0.1
+	crashPointProbability = 0.001
 )
 
 // TxSourceMultiShort uses multiple workloads for a short time.
@@ -70,9 +70,8 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	consensusPruneMaxKept:             200,
 	// XXX: use no more than 2 storage, 4 compute nodes as SGX E2E test
 	// instances cannot handle any more nodes that are currently configured.
-	numStorageNodes:   2,
-	numComputeNodes:   4,
-	enableCrashPoints: true,
+	numStorageNodes: 2,
+	numComputeNodes: 4,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -106,8 +105,8 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	// Use 4 storage nodes so runtime continues to work when one of the nodes
 	// is shut down.
 	numStorageNodes: 4,
-	// In tests with long restarts we want to have 3 worker nodes nodes in the
-	// runtime executor worker committee. That is so that each published runtime
+	// In tests with long restarts we want to have 3 worker nodes in the runtime
+	// executor worker committee. That is so that each published runtime
 	// transaction will be received by at least one active executor worker.
 	// In worst case, 2 nodes can be offline at the same time. Aditionally we
 	// need one backup node and one extra node.

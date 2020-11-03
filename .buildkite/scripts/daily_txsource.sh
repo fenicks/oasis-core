@@ -12,10 +12,11 @@ if [[ $BUILDKITE_RETRY_COUNT == 0 ]]; then
         --scenario e2e/runtime/txsource-multi \
         "$@"
 else
-    curl -H "Content-Type: application/json" \
-        -X POST \
-        --data "{\"text\": \"Daily transaction source tests failure\"}" \
-        "$SLACK_WEBHOOK_URL"
+    # TEMPORARY.
+    # curl -H "Content-Type: application/json" \
+    #     -X POST \
+    #     --data "{\"text\": \"Daily transaction source tests failure\"}" \
+    #     "$SLACK_WEBHOOK_URL"
 
     # Exit with non-zero exit code, so that the buildkite build will be
     # marked as failed.
