@@ -5,6 +5,7 @@ package crash
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -26,6 +27,10 @@ const (
 
 	// CfgDefaultCrashPointProbability is the default crash point probability.
 	CfgDefaultCrashPointProbability = "debug.crash.default"
+
+	// CrashDefaultExitCode is the exit code that will be used if program is exited
+	// due to a debug crash invocation.
+	CrashDefaultExitCode = 123
 )
 
 // RandomProvider interface that provides a Float64 random.
@@ -60,7 +65,8 @@ func newDefaultRandomProvider() RandomProvider {
 }
 
 func defaultCrashMethod() {
-	runtime.Breakpoint()
+	// TODO: is there a better way to do this.
+	os.Exit(CrashDefaultExitCode)
 }
 
 var crashGlobal *Crasher
