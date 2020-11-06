@@ -68,16 +68,17 @@ const (
 	cfgSchedulerDebugStaticValidators  = "scheduler.debug.static_validators"
 
 	// Beacon config flags.
-	CfgBeaconBackend                    = "beacon.backend"
-	CfgBeaconDebugDeterministic         = "beacon.debug.deterministic"
-	CfgBeaconDebugMockBackend           = "beacon.debug.mock_backend"
-	CfgBeaconInsecureTendermintInterval = "beacon.insecure.tendermint.interval"
-	CfgBeaconSCRAPEParticipants         = "beacon.scrape.participants"
-	CfgBeaconSCRAPEThreshold            = "beacon.scrape.threshold"
-	CfgBeaconSCRAPEPVSSThreshold        = "beacon.scrape.pvss_threshold"
-	CfgBeaconSCRAPECommitInterval       = "beacon.scrape.commit_interval"
-	CfgBeaconSCRAPERevealInterval       = "beacon.scrape.reveal_interval"
-	CfgBeaconSCRAPETransitionDelay      = "beacon.scrape.transition_delay"
+	CfgBeaconBackend                      = "beacon.backend"
+	CfgBeaconDebugDeterministic           = "beacon.debug.deterministic"
+	CfgBeaconDebugMockBackend             = "beacon.debug.mock_backend"
+	CfgBeaconInsecureTendermintInterval   = "beacon.insecure.tendermint.interval"
+	CfgBeaconSCRAPEParticipants           = "beacon.scrape.participants"
+	CfgBeaconSCRAPEThreshold              = "beacon.scrape.threshold"
+	CfgBeaconSCRAPEPVSSThreshold          = "beacon.scrape.pvss_threshold"
+	CfgBeaconSCRAPECommitInterval         = "beacon.scrape.commit_interval"
+	CfgBeaconSCRAPERevealInterval         = "beacon.scrape.reveal_interval"
+	CfgBeaconSCRAPETransitionDelay        = "beacon.scrape.transition_delay"
+	CfgBeaconSCRAPEDebugForcedParticipant = "beacon.scrape.debug.forced_participant"
 
 	// Roothash config flags.
 	cfgRoothashDebugDoNotSuspendRuntimes = "roothash.debug.do_not_suspend_runtimes"
@@ -232,27 +233,33 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			Interval: viper.GetInt64(CfgBeaconInsecureTendermintInterval),
 		}
 	case beacon.BackendSCRAPE:
-		doc.Beacon.Parameters.SCRAPEParameters = &beacon.SCRAPEParameters{
-			Participants:    viper.GetUint64(CfgBeaconSCRAPEParticipants),
-			Threshold:       viper.GetUint64(CfgBeaconSCRAPEThreshold),
-			PVSSThreshold:   viper.GetUint64(CfgBeaconSCRAPEPVSSThreshold),
-			CommitInterval:  viper.GetInt64(CfgBeaconSCRAPECommitInterval),
-			RevealInterval:  viper.GetInt64(CfgBeaconSCRAPERevealInterval),
-			TransitionDelay: viper.GetInt64(CfgBeaconSCRAPETransitionDelay),
-			GasCosts:        beacon.DefaultGasCosts, // TODO: Make these configurable.
-		}
-	}
-
-	var pkBlacklist []signature.PublicKey
-	for _, pkStr := range viper.GetStringSlice(cfgConsensusBlacklistPublicKey) {
-		var pk signature.PublicKey
-		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
-			logger.Error("failed to parse blacklisted public key",
+		var forcedParticipants []signature.PublicKey
+		forcedParticipants, err := parsePublicKeyStringSlice(CfgBeaconSCRAPEDebugForcedParticipant)
+		if err != nil {
+			logger.Error("failed to parse SCRAPE forced public key",
 				"err", err,
 			)
 			return
 		}
-		pkBlacklist = append(pkBlacklist, pk)
+
+		doc.Beacon.Parameters.SCRAPEParameters = &beacon.SCRAPEParameters{
+			Participants:            viper.GetUint64(CfgBeaconSCRAPEParticipants),
+			Threshold:               viper.GetUint64(CfgBeaconSCRAPEThreshold),
+			PVSSThreshold:           viper.GetUint64(CfgBeaconSCRAPEPVSSThreshold),
+			CommitInterval:          viper.GetInt64(CfgBeaconSCRAPECommitInterval),
+			RevealInterval:          viper.GetInt64(CfgBeaconSCRAPERevealInterval),
+			TransitionDelay:         viper.GetInt64(CfgBeaconSCRAPETransitionDelay),
+			GasCosts:                beacon.DefaultGasCosts, // TODO: Make these configurable.
+			DebugForcedParticipants: forcedParticipants,
+		}
+	}
+
+	pkBlacklist, err := parsePublicKeyStringSlice(cfgConsensusBlacklistPublicKey)
+	if err != nil {
+		logger.Error("failed to parse blacklisted public key",
+			"err", err,
+		)
+		return
 	}
 
 	doc.Consensus = consensusGenesis.Genesis{
@@ -734,6 +741,7 @@ func init() {
 	initGenesisFlags.Int64(CfgBeaconSCRAPECommitInterval, 43200, "SCRAPE round commit interval (in blocks)")
 	initGenesisFlags.Int64(CfgBeaconSCRAPERevealInterval, 34560, "SCRAPE round reveal interval (in blocks)")
 	initGenesisFlags.Int64(CfgBeaconSCRAPETransitionDelay, 8639, "SCRAPE round transition delay (in blocks)")
+	initGenesisFlags.StringSlice(CfgBeaconSCRAPEDebugForcedParticipant, nil, "SCRAPE forced participant public keys")
 	_ = initGenesisFlags.MarkHidden(CfgBeaconDebugDeterministic)
 	_ = initGenesisFlags.MarkHidden(CfgBeaconDebugMockBackend)
 
@@ -770,4 +778,20 @@ func init() {
 	initGenesisFlags.AddFlagSet(flags.DebugTestEntityFlags)
 	initGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
 	initGenesisFlags.AddFlagSet(flags.DebugDontBlameOasisFlag)
+}
+
+func parsePublicKeyStringSlice(cfg string) ([]signature.PublicKey, error) {
+	var pks []signature.PublicKey
+	for _, pkStr := range viper.GetStringSlice(cfg) {
+		var pk signature.PublicKey
+		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
+			logger.Error("failed to parse public key",
+				"err", err,
+			)
+			return nil, err
+		}
+		pks = append(pks, pk)
+	}
+
+	return pks, nil
 }

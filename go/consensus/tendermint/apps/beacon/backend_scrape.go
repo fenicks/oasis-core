@@ -395,15 +395,60 @@ func (impl *backendSCRAPE) initRound(
 	if err != nil {
 		return fmt.Errorf("beacon: failed to get current validators: %w", err)
 	}
+
+	// The byzantine test requires forcing the byzantine node to be a beacon
+	// participant.
+	var toForce []signature.PublicKey
+	if len(params.SCRAPEParameters.DebugForcedParticipants) > 0 {
+		forceMap := make(map[signature.PublicKey]bool)
+		for _, nodeID := range params.SCRAPEParameters.DebugForcedParticipants {
+			if forceMap[nodeID] {
+				continue
+			}
+
+			var node *node.Node
+			node, err = registryState.Node(ctx, nodeID)
+			if err != nil {
+				ctx.Logger().Error("can't force node, failed to query node descriptor",
+					"id", nodeID,
+					"err", err,
+				)
+				continue
+			}
+
+			consensusID := node.Consensus.ID
+			if validators[consensusID] != 0 {
+				delete(validators, consensusID)
+			}
+
+			ctx.Logger().Debug("forcing node participation in SCRAPE round",
+				"epoch", epoch,
+				"round", scrapeState.Round,
+				"id", nodeID,
+			)
+
+			forceMap[nodeID] = true
+			toForce = append(toForce, consensusID)
+		}
+	}
+
 	candidateParticipants, err := validatorsByVotingPower(validators, entropy)
 	if err != nil {
 		return fmt.Errorf("beacon: failed to sort current validators: %w", err)
+	}
+	if len(toForce) > 0 {
+		candidateParticipants = append(toForce, candidateParticipants...)
 	}
 
 	numParticipants := int(params.SCRAPEParameters.Participants)
 	participants := make([]scrape.Point, 0, numParticipants)
 	participantIDs := make([]signature.PublicKey, 0, numParticipants)
+
 	for _, validatorID := range candidateParticipants {
+		if len(participants) == numParticipants {
+			break
+		}
+
 		var node *node.Node
 		node, err = registryState.NodeBySubKey(ctx, validatorID)
 		if err != nil || node.Beacon == nil {
@@ -415,9 +460,6 @@ func (impl *backendSCRAPE) initRound(
 
 		participants = append(participants, node.Beacon.Point)
 		participantIDs = append(participantIDs, node.ID)
-		if len(participants) == numParticipants {
-			break
-		}
 	}
 	if l := len(participants); l < numParticipants {
 		return fmt.Errorf("beacon: insufficient beacon participants: %d (want %d)", l, numParticipants)

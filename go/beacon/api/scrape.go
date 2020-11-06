@@ -29,6 +29,8 @@ type SCRAPEParameters struct {
 	TransitionDelay int64 `json:"transition_delay"`
 
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	DebugForcedParticipants []signature.PublicKey `json:"forced_participants,omitempty"`
 }
 
 const (

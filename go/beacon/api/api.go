@@ -150,6 +150,9 @@ func (g *Genesis) SanityCheck() error {
 		if params.TransitionDelay == 0 {
 			return fmt.Errorf("beacon: sanity check failed: SCRAPE transition delay must be > 0")
 		}
+		if len(params.DebugForcedParticipants) > 0 && !flags.DebugDontBlameOasis() {
+			return fmt.Errorf("beacon: sanity check failed: SCRAPE forced participants set")
+		}
 	default:
 		return fmt.Errorf("beacon: sanity check failed: unknown backend: '%s'", g.Parameters.Backend)
 	}

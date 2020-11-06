@@ -529,6 +529,8 @@ func RegisterScenarios() error {
 		ByzantineStorageFailApply,
 		ByzantineStorageFailApplyBatch,
 		ByzantineStorageFailRead,
+		// Byzantine beacon.
+		ByzantineBeaconHonest,
 		// Storage sync test.
 		StorageSync,
 		StorageSyncFromRegistered,

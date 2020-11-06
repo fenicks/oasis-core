@@ -23,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -745,26 +746,8 @@ func (net *Network) runNodeBinary(consoleWriter io.Writer, args ...string) error
 }
 
 func (net *Network) generateDeterministicIdentity(dir *env.Dir, rawSeed string, roles []signature.SignerRole) error {
-	h := crypto.SHA512.New()
-	_, _ = h.Write([]byte(rawSeed))
-	seed := h.Sum(nil)
-
-	rng, err := drbg.New(crypto.SHA512, seed, nil, []byte("deterministic node identities test"))
-	if err != nil {
-		return err
-	}
-
-	for _, role := range roles {
-		factory, err := fileSigner.NewFactory(dir.String(), role)
-		if err != nil {
-			return err
-		}
-		if _, err = factory.Generate(role, rng); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	_, err := GenerateDeterministicNodeKeys(dir, rawSeed, roles)
+	return err
 }
 
 func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed string) error {
@@ -773,6 +756,40 @@ func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed stri
 		signature.SignerP2P,
 		signature.SignerConsensus,
 	})
+}
+
+// GenerateDeterministicNodeKeys generates and returns deterministic node keys.
+func GenerateDeterministicNodeKeys(dir *env.Dir, rawSeed string, roles []signature.SignerRole) ([]signature.PublicKey, error) {
+	h := crypto.SHA512.New()
+	_, _ = h.Write([]byte(rawSeed))
+	seed := h.Sum(nil)
+
+	rng, err := drbg.New(crypto.SHA512, seed, nil, []byte("deterministic node identities test"))
+	if err != nil {
+		return nil, err
+	}
+
+	factoryCtor := fileSigner.NewFactory
+	if dir == nil {
+		factoryCtor = func(args interface{}, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+			return memorySigner.NewFactory(), nil
+		}
+	}
+
+	var pks []signature.PublicKey
+	for _, role := range roles {
+		factory, err := factoryCtor(dir.String(), role)
+		if err != nil {
+			return nil, err
+		}
+		signer, err := factory.Generate(role, rng)
+		if err != nil {
+			return nil, err
+		}
+		pks = append(pks, signer.Public())
+	}
+
+	return pks, nil
 }
 
 // generateTempSocketPath returns a unique filename for a node's internal socket in the test base dir
@@ -913,6 +930,13 @@ func (net *Network) MakeGenesis() error {
 			"--" + genesis.CfgBeaconSCRAPERevealInterval, strconv.FormatInt(net.cfg.Beacon.SCRAPEParameters.RevealInterval, 10),
 			"--" + genesis.CfgBeaconSCRAPETransitionDelay, strconv.FormatInt(net.cfg.Beacon.SCRAPEParameters.TransitionDelay, 10),
 		}...)
+		if pks := net.cfg.Beacon.SCRAPEParameters.DebugForcedParticipants; len(pks) > 0 {
+			for _, pk := range pks {
+				args = append(args, []string{
+					"--" + genesis.CfgBeaconSCRAPEDebugForcedParticipant, pk.String(),
+				}...)
+			}
+		}
 	default:
 		return fmt.Errorf("oasis: unsupported beacon backend: %s", net.cfg.Beacon.Backend)
 	}

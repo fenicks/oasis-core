@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -46,7 +46,7 @@ func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error
 
 	// Use mock epochtime and small group size so we can control which node will
 	// be in the committee.
-	f.Network.EpochtimeMock = true
+	f.Network.SetMockEpoch()
 	f.Runtimes[1].Storage.GroupSize = 1
 	f.Runtimes[1].Storage.MinWriteReplication = 1
 
@@ -76,7 +76,7 @@ func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error
 
 func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-	var nextEpoch epochtime.EpochTime
+	var nextEpoch beacon.EpochTime
 
 	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
@@ -92,7 +92,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 	// We're at epoch 2 after the initial transitions
-	nextEpoch = epochtime.EpochTime(3)
+	nextEpoch = beacon.EpochTime(3)
 
 	// Wait for the client to exit.
 	if err = sc.waitClient(childEnv, cmd, clientErrCh); err != nil {
